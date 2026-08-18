@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kalendář zápasů – Hanspaulská liga podzim 2026</title>
+<meta name="description" content="Stáhněte si rozpis zápasů svého týmu z Hanspaulské ligy jako kalendář .ics pro Google Kalendář, Apple Kalendář nebo Outlook.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+</head>
+<body>
+<header class="site-header">
+  <h1>Kalendář zápasů</h1>
+  <p class="tagline">Hanspaulská liga&nbsp;– podzim 2026. Najdi svůj tým a stáhni si rozpis do kalendáře.</p>
+</header>
+
+<main>
+  <section class="search" aria-labelledby="search-label">
+    <label id="search-label" for="q">Hledat tým</label>
+    <input
+      id="q"
+      type="search"
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+      placeholder="Např. Měcholupská, kktnc, 7.H…"
+      role="combobox"
+      aria-expanded="false"
+      aria-controls="results"
+      aria-autocomplete="list"
+      aria-describedby="search-hint">
+    <p id="search-hint" class="hint">
+      Diakritika nevadí – <em>mecholupska</em> najde <em>Měcholupská střeva</em>.
+      Šipkami vybíráš, Enterem potvrdíš, Esc maže.
+    </p>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <ul id="results" role="listbox" aria-label="Nalezené týmy"></ul>
+  </section>
+
+  <section id="detail" class="detail" hidden aria-live="polite"></section>
+</main>
+
+<footer class="site-footer">
+  <p>
+    Data pocházejí z&nbsp;<a href="https://www.psmf.cz/">psmf.cz</a>.
+    Stažena <time id="generated"></time>.
+  </p>
+  <p class="fineprint">
+    Rozpis se v&nbsp;průběhu sezóny mění – před zápasem si ho radši ověř na webu ligy.
+    Přehled hřišť najdeš na <a href="https://www.psmf.cz/hriste/">psmf.cz/hriste</a>.
+  </p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

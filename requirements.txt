@@ -1,0 +1,11 @@
+# Runtime
+requests==2.34.2
+beautifulsoup4==4.15.0
+lxml==6.1.1
+icalendar==7.2.2          # used only to validate generated output, never to write it
+
+# Development (lint, types, tests)
+ruff==0.16.3
+mypy==2.3.1
+types-requests==2.33.0.20260712
+pytest==9.1.1

@@ -1,0 +1,27 @@
+[project]
+name = "psmf-cal"
+version = "1.0.0"
+description = "Static site generator for PSMF Hanspaulska liga team calendars"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RET", "C4", "PTH", "RUF"]
+# The en dash in event summaries and calendar names is deliberate Czech
+# typography ("Home - Away"), not a mistyped hyphen.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["psmf_cal", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["bs4.*", "icalendar.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
