@@ -70,10 +70,15 @@ node tests/frontend_check.mjs
 
 ### Notes on a few decisions
 
-**Fixtures are inlined into `teams.json`.** Pitch descriptions are the bulky part and they
+**Fixtures are inlined into the index.** Pitch descriptions are the bulky part and they
 repeat, so they are deduplicated into a shared map keyed by pitch code. What remains is
 ~130 bytes per fixture — under 1 MB for the whole league, which is worth one request to
 avoid per-team fetch plumbing.
+
+**The index ships as `teams.js`, not `teams.json`.** It is one assignment to a global,
+pulled in with a `<script>` tag. A page opened straight from disk cannot `fetch()` a
+sibling file, so this is the one form that works both from `file://` and from a static
+server. The payload is the same JSON either way.
 
 **Search normalisation lives in Python.** `normalize_search()` precomputes a folded form of
 every team name into the index; the browser applies the identical transform to the query

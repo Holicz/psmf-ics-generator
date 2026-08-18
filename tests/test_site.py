@@ -9,7 +9,7 @@ from typing import Any
 
 from psmf_cal.models import Pitch, Team
 from psmf_cal.parsing.text import normalize_search
-from psmf_cal.site import build_index, write_site
+from psmf_cal.site import INDEX_FILENAME, INDEX_GLOBAL, build_index, write_site
 
 
 def _index(kktnc: Team, pitches: dict[str, Pitch]) -> dict[str, Any]:
@@ -86,15 +86,26 @@ class TestWriteSite:
     ) -> None:
         when = dt.datetime(2026, 8, 18, 12, 30, tzinfo=dt.UTC)
         write_site(tmp_path, [kktnc], pitches, when)
-        for name in ("teams.json", "index.html", "style.css", "app.js"):
+        for name in (INDEX_FILENAME, "index.html", "style.css", "app.js"):
             assert (tmp_path / name).exists()
 
-    def test_index_is_valid_utf8_json(
+    def test_index_is_a_script_assigning_a_global(
+        self, kktnc: Team, pitches: dict[str, Pitch], tmp_path: Path
+    ) -> None:
+        """A <script> tag, not fetched JSON, so the page also works from file://."""
+        when = dt.datetime(2026, 8, 18, 12, 30, tzinfo=dt.UTC)
+        path = write_site(tmp_path, [kktnc], pitches, when)
+        text = path.read_text(encoding="utf-8")
+        assert text.startswith(f"window.{INDEX_GLOBAL}=")
+        assert text.endswith(";\n")
+
+    def test_index_payload_is_valid_json(
         self, kktnc: Team, pitches: dict[str, Pitch], tmp_path: Path
     ) -> None:
         when = dt.datetime(2026, 8, 18, 12, 30, tzinfo=dt.UTC)
         path = write_site(tmp_path, [kktnc], pitches, when)
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        payload = json.loads(text[text.index("=") + 1 :].rstrip().rstrip(";"))
         assert payload["teams"][0]["n"] == "KKTNC On Tour"
 
     def test_index_keeps_diacritics_unescaped(

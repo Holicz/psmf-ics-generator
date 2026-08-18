@@ -22,7 +22,7 @@ from psmf_cal.parsing.pitches import parse_pitches
 from psmf_cal.parsing.season import parse_season_index
 from psmf_cal.parsing.team import parse_team_page
 from psmf_cal.parsing.text import ParseError
-from psmf_cal.site import write_site
+from psmf_cal.site import INDEX_FILENAME, write_site
 from psmf_cal.validate import ValidationError, assert_dst_boundary_is_sane, validate_calendar
 
 log = logging.getLogger("psmf_cal")
@@ -160,7 +160,7 @@ def build(args: argparse.Namespace) -> int:
     log.info("teams parsed      %d", len(teams))
     log.info("matches           %d", sum(len(t.matches) for t in teams))
     log.info("ics files written %d", written)
-    log.info("teams.json        %s", _human(index_path.stat().st_size))
+    log.info("%-17s %s", INDEX_FILENAME, _human(index_path.stat().st_size))
     log.info("dist/             %s", _human(_directory_size(dist)))
     log.info("http              %d cached, %d fetched", fetcher.hits, fetcher.misses)
     if dst_note:

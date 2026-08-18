@@ -7,6 +7,12 @@ fixture; what remains is roughly 130 bytes per fixture, i.e. about 1 MB for the
 whole league. That is small enough to ship in one request, which keeps the
 front end free of per-team fetch plumbing and means selecting a team never
 waits on the network.
+
+The index is emitted as ``teams.js`` -- a single assignment to a global --
+rather than as ``teams.json`` loaded with fetch(). A page opened straight from
+disk is same-origin-restricted and fetch() of a sibling file fails there, so a
+plain <script> tag is the one form that works both from ``file://`` and from a
+static server. The payload is identical JSON either way.
 """
 
 from __future__ import annotations
@@ -22,6 +28,10 @@ from psmf_cal.parsing.text import normalize_search
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 ASSET_FILES = ("index.html", "style.css", "app.js")
+
+#: Global the emitted index assigns itself to, read by assets/app.js.
+INDEX_GLOBAL = "PSMF_DATA"
+INDEX_FILENAME = "teams.js"
 
 
 def _pitch_json(pitch: Pitch) -> dict[str, object]:
@@ -80,15 +90,13 @@ def write_site(
     pitches: dict[str, Pitch],
     generated_at: dt.datetime,
 ) -> Path:
-    """Write ``teams.json`` and copy the static assets into ``dist``."""
+    """Write the search index and copy the static assets into ``dist``."""
     dist.mkdir(parents=True, exist_ok=True)
 
-    index_path = dist / "teams.json"
+    index_path = dist / INDEX_FILENAME
     payload = build_index(teams, pitches, generated_at)
-    index_path.write_text(
-        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
-        encoding="utf-8",
-    )
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    index_path.write_text(f"window.{INDEX_GLOBAL}={encoded};\n", encoding="utf-8")
 
     for name in ASSET_FILES:
         source = ASSETS_DIR / name

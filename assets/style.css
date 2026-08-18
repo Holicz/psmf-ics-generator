@@ -88,7 +88,7 @@ a { color: var(--focus); }
 
 #q::placeholder { color: var(--text-muted); }
 
-.hint, .status {
+.status {
   margin: .5rem 0 0;
   font-size: .85rem;
   color: var(--text-muted);
@@ -232,10 +232,10 @@ a { color: var(--focus); }
 }
 
 .site-footer p { margin: .3rem 0; }
-.fineprint { font-size: .8rem; }
 
 @media (min-width: 40rem) {
   .fixture { grid-template-columns: 8.5rem 1fr; align-items: baseline; }
-  .fixture-when strong { display: inline; }
+  /* Date and weekday sit on one line here, so they need separating. */
+  .fixture-when strong { display: inline; margin-right: .35rem; }
   .fixture-when { line-height: inherit; }
 }

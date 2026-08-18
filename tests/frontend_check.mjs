@@ -6,7 +6,6 @@
  *   python -m psmf_cal.cli && node tests/frontend_check.mjs
  */
 import fs from 'fs';
-const payload = JSON.parse(fs.readFileSync('dist/teams.json', 'utf8'));
 
 // --- minimal DOM stub -------------------------------------------------
 function mkNode(tag) {
@@ -37,7 +36,11 @@ global.document = {
   createTextNode: t => { const n = mkNode('#text'); n.textContent = t; return n; },
 };
 global.location = { search: '' };
-global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(payload) });
+global.window = global;
+
+// --- load the generated index exactly as the page does ----------------
+eval(fs.readFileSync('dist/teams.js', 'utf8'));
+if (!global.PSMF_DATA) { console.error('dist/teams.js did not define PSMF_DATA'); process.exit(1); }
 
 // --- run the real app.js ---------------------------------------------
 eval(fs.readFileSync('assets/app.js', 'utf8'));

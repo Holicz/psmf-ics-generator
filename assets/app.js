@@ -217,14 +217,14 @@
     input.focus();
   }
 
-  input.disabled = true;
-  fetch('teams.json')
-    .then(function (response) {
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      return response.json();
-    })
-    .then(start)
-    .catch(function (error) {
-      status.textContent = 'Nepodařilo se načíst seznam týmů (' + error.message + ').';
-    });
+  /* teams.js is a plain <script> that assigns window.PSMF_DATA, rather than
+   * JSON fetched at runtime: a page opened directly from disk cannot fetch a
+   * sibling file, and this way the site works both from file:// and from any
+   * static server. */
+  if (window.PSMF_DATA && Array.isArray(window.PSMF_DATA.teams)) {
+    start(window.PSMF_DATA);
+  } else {
+    input.disabled = true;
+    status.textContent = 'Nepodařilo se načíst seznam týmů – chybí soubor teams.js.';
+  }
 })();
