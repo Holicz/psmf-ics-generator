@@ -16,7 +16,7 @@ from pathlib import Path
 
 from psmf_cal.http import CachedFetcher, FetchError
 from psmf_cal.ics import render_calendar
-from psmf_cal.models import PITCHES_URL, SEASON_URL, GroupRef, Pitch, Team
+from psmf_cal.models import LEAGUES, PITCHES_URL, GroupRef, League, Pitch, Team
 from psmf_cal.parsing.group import parse_group
 from psmf_cal.parsing.pitches import parse_pitches
 from psmf_cal.parsing.season import parse_season_index
@@ -36,6 +36,29 @@ class Failure:
     detail: str
 
 
+def _selected_leagues(keys: list[str] | None) -> list[League] | None:
+    """Resolve --league keys, or every league when the flag is absent."""
+    if not keys:
+        return list(LEAGUES)
+    wanted = {key.lower() for key in keys}
+    chosen = [league for league in LEAGUES if league.key in wanted]
+    unknown = wanted - {league.key for league in chosen}
+    if unknown:
+        known = ", ".join(league.key for league in LEAGUES)
+        log.error("unknown league(s) %s; known: %s", ", ".join(sorted(unknown)), known)
+        return None
+    return chosen
+
+
+def _matches_only(group: GroupRef, wanted: set[str]) -> bool:
+    """Whether --only names this group.
+
+    A bare ``7-h`` selects that group in every league being crawled; ``vet:1-a``
+    pins it to one, which is what you want now that ``1-a`` exists four times.
+    """
+    return group.slug in wanted or f"{group.league.key}:{group.slug}" in wanted
+
+
 def _collect_group(
     fetcher: CachedFetcher,
     group: GroupRef,
@@ -47,7 +70,7 @@ def _collect_group(
         listing = parse_group(fetcher.get(group.url), group.url, group)
     except (FetchError, ParseError) as exc:
         failures.append(Failure(group.url, str(exc)))
-        log.error("group %s: FAILED (%s)", group.label, exc)
+        log.error("group %s: FAILED (%s)", group.key, exc)
         return []
 
     teams: list[Team] = []
@@ -72,7 +95,7 @@ def _collect_group(
     total = sum(len(t.matches) for t in teams)
     log.info(
         "group %s: %d teams, %d matches%s",
-        group.label,
+        group.key,
         len(teams),
         total,
         "" if len(teams) == len(listing) else f" ({len(listing) - len(teams)} failed)",
@@ -84,14 +107,16 @@ def _write_calendars(
     dist: Path, teams: list[Team], stamp: dt.datetime, failures: list[Failure]
 ) -> tuple[int, str]:
     """Render, validate and write one .ics per team. Returns (count, dst_note)."""
+    # Keyed by the league-qualified group, so the veterans' 1-a does not pour
+    # its kit colours into the Hanspaulska 1-a.
     by_group: dict[str, dict[str, str | None]] = {}
     for team in teams:
-        by_group.setdefault(team.group.slug, {})[team.slug] = team.colors
+        by_group.setdefault(team.group.key, {})[team.slug] = team.colors
 
     written = 0
     dst_note = ""
     for team in teams:
-        payload = render_calendar(team, by_group[team.group.slug], stamp)
+        payload = render_calendar(team, by_group[team.group.key], stamp)
         try:
             validate_calendar(team, payload)
             note = assert_dst_boundary_is_sane(team, payload)
@@ -130,15 +155,24 @@ def build(args: argparse.Namespace) -> int:
     pitches = parse_pitches(fetcher.get(PITCHES_URL), PITCHES_URL)
     log.info("  %d pitch codes", len(pitches))
 
-    log.info("season index %s", SEASON_URL)
-    groups = parse_season_index(fetcher.get(SEASON_URL), SEASON_URL)
+    leagues = _selected_leagues(args.league)
+    if leagues is None:
+        return 2
+
+    groups: list[GroupRef] = []
+    for league in leagues:
+        log.info("season index %s", league.url)
+        found = parse_season_index(fetcher.get(league.url), league.url, league)
+        log.info("  %s: %d groups", league.name, len(found))
+        groups.extend(found)
+
     if args.only:
         wanted = set(args.only)
-        groups = [g for g in groups if g.slug in wanted]
+        groups = [g for g in groups if _matches_only(g, wanted)]
         if not groups:
             log.error("no group matched --only %s", ", ".join(sorted(wanted)))
             return 2
-    log.info("  %d groups", len(groups))
+    log.info("  %d groups in total", len(groups))
 
     failures: list[Failure] = []
     teams: list[Team] = []
@@ -157,6 +191,10 @@ def build(args: argparse.Namespace) -> int:
 
     log.info("")
     log.info("=" * 62)
+    for league in leagues:
+        count = sum(1 for team in teams if team.league == league)
+        if count:
+            log.info("%-17s %d teams", league.name, count)
     log.info("teams parsed      %d", len(teams))
     log.info("matches           %d", sum(len(t.matches) for t in teams))
     log.info("ics files written %d", written)
@@ -181,7 +219,7 @@ def build(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="psmf-cal",
-        description="Generate a static site of .ics calendars for Hanspaulska liga teams.",
+        description="Generate a static site of .ics calendars for PSMF league teams.",
     )
     parser.add_argument("--dist", type=Path, default=Path("dist"), help="output directory")
     parser.add_argument("--cache", type=Path, default=Path(".cache"), help="HTML cache directory")
@@ -189,10 +227,16 @@ def main(argv: list[str] | None = None) -> int:
         "--no-cache", action="store_true", help="ignore cached HTML and refetch every page"
     )
     parser.add_argument(
+        "--league",
+        nargs="+",
+        metavar="KEY",
+        help="restrict the crawl to these leagues: " + " ".join(league.key for league in LEAGUES),
+    )
+    parser.add_argument(
         "--only",
         nargs="+",
         metavar="GROUP",
-        help="restrict the crawl to these group slugs, e.g. 7-h 1-a",
+        help="restrict the crawl to these groups, e.g. 7-h or vet:1-a",
     )
     args = parser.parse_args(argv)
 

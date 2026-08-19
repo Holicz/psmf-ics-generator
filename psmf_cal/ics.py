@@ -21,11 +21,14 @@ from psmf_cal.models import (
 )
 from psmf_cal.parsing.text import CZECH_WEEKDAYS_FULL
 
-PRODID = "-//psmf-cal//Hanspaulska liga calendar generator//CS"
+PRODID = "-//psmf-cal//PSMF calendar generator//CS"
 
-#: The source publishes a kick-off but never an end time. Hanspaulska liga is
-#: played in two 35-minute halves plus the half-time break, so 75 minutes is the
-#: scheduled slot; every event is given this fixed length.
+#: The source publishes a kick-off but never an end time, so every event is
+#: given this fixed length. The 5+1 rules (Pravidlo 6) are identical in all
+#: four leagues -- 2 x 30 minutes plus a break of at most five -- so one
+#: duration covers them all. The 75 minutes kept here is deliberately
+#: generous: it absorbs the referee's added time, and a block that runs a
+#: little long is less disruptive in a diary than one that ends early.
 MATCH_DURATION = dt.timedelta(minutes=75)
 
 #: Reminder lead time, as required by the brief.
@@ -118,11 +121,15 @@ def _vtimezone() -> list[str]:
 def event_uid(team: Team, match: Match) -> str:
     """Stable identity for one fixture.
 
-    Includes the group because team slugs repeat across levels: without it, a
-    visitor subscribed to two groups that both contain a "sparta" would have one
-    team's fixtures silently overwrite the other's.
+    Includes the league and the group because team slugs repeat across both: a
+    slug is unique only inside one group, and group slugs such as ``1-a`` exist
+    in all four leagues. Without the full path, a visitor subscribed to two
+    calendars that both contain a "sparta" would have one team's fixtures
+    silently overwrite the other's.
     """
-    return f"{team.group.slug}-{team.slug}-{SEASON_UID_TAG}-{match.round_no}@psmf.cz"
+    return (
+        f"{team.league.key}-{team.group.slug}-{team.slug}-{SEASON_UID_TAG}-{match.round_no}@psmf.cz"
+    )
 
 
 def _summary(team: Team, match: Match) -> str:
@@ -138,8 +145,9 @@ def _description(team: Team, match: Match, kits: GroupKits) -> str:
     weekday = CZECH_WEEKDAYS_FULL[kickoff.weekday()]
 
     lines = [
-        f"{match.round_no}. kolo – Hanspaulská liga, {team.group.label} "
-        f"({SEASON_LABEL.removeprefix('HL ')})",
+        # No league here: a player is in exactly one, and the calendar is named
+        # after it -- repeating it on every fixture is noise week after week.
+        f"{match.round_no}. kolo – {team.group.label} ({SEASON_LABEL})",
         f"Soupeř: {opponent.name}",
         f"Kde hrajete: {'doma' if at_home else 'venku'}",
         f"Výkop: {weekday} {kickoff.day}. {kickoff.month}. {kickoff.year} v {kickoff:%H:%M}",
@@ -197,7 +205,10 @@ def _lines(team: Team, kits: GroupKits, dtstamp: dt.datetime) -> Iterator[str]:
     yield "METHOD:PUBLISH"
     yield f"X-WR-CALNAME:{escape_text(team.calendar_name)}"
     yield "X-WR-TIMEZONE:Europe/Prague"
-    yield f"X-WR-CALDESC:{escape_text(f'Rozpis zápasů – {team.name} ({team.group.label})')}"
+    yield (
+        "X-WR-CALDESC:"
+        + escape_text(f"Rozpis zápasů – {team.name} ({team.league.name} {team.group.label})")
+    )
     yield from _vtimezone()
     for match in team.matches:
         yield from _event(team, match, kits, dtstamp)

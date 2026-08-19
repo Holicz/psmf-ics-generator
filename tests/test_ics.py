@@ -16,6 +16,7 @@ from psmf_cal.validate import (
 )
 
 KITS = {"kktnc-on-tour": "bílá, černá", "patespool": "zlatá", "real-oranjes": "oranžová, modrá"}
+VET_KITS = {"dynamo-uk-vet": "černá, bílá", "santa-dominica-vet": "černo-bílá"}
 
 
 class TestEscaping:
@@ -89,9 +90,18 @@ class TestUid:
         first = kktnc.matches[0]
         assert event_uid(kktnc, first) == event_uid(kktnc, first)
 
-    def test_includes_the_group(self, kktnc: Team) -> None:
-        """Slugs are unique only within a group, so the group must be part of the UID."""
-        assert event_uid(kktnc, kktnc.matches[0]) == "7-h-kktnc-on-tour-2026p-1@psmf.cz"
+    def test_includes_the_league_and_the_group(self, kktnc: Team) -> None:
+        """Slugs are unique only within a group, and group slugs repeat across
+        leagues, so a UID needs both to identify a fixture."""
+        assert event_uid(kktnc, kktnc.matches[0]) == "hl-7-h-kktnc-on-tour-2026p-1@psmf.cz"
+
+    def test_does_not_collide_across_leagues(self, kktnc: Team, dynamo: Team) -> None:
+        """The failure this guards against is silent: two calendars sharing a UID
+        overwrite each other inside the visitor's client, not here."""
+        assert event_uid(dynamo, dynamo.matches[0]) == "vet-1-a-dynamo-uk-vet-2026p-1@psmf.cz"
+        mine = {event_uid(kktnc, m) for m in kktnc.matches}
+        theirs = {event_uid(dynamo, m) for m in dynamo.matches}
+        assert not mine & theirs
 
     def test_is_unique_per_round(self, kktnc: Team) -> None:
         uids = {event_uid(kktnc, m) for m in kktnc.matches}
@@ -133,6 +143,23 @@ class TestRenderedCalendar:
     def test_calendar_name(self, kktnc: Team, stamp: dt.datetime) -> None:
         text = render_calendar(kktnc, KITS, stamp).decode("utf-8")
         assert "X-WR-CALNAME:KKTNC On Tour – HL podzim 2026 (7.H)" in text
+
+    def test_calendar_name_names_the_league(self, dynamo: Team, stamp: dt.datetime) -> None:
+        """Two calendars called "Dynamo 1.A" in one client would be unusable."""
+        text = render_calendar(dynamo, VET_KITS, stamp).decode("utf-8")
+        assert "X-WR-CALNAME:Dynamo UK VET – VET podzim 2026 (1.A)" in text
+
+    def test_description_leaves_the_league_out(self, dynamo: Team, stamp: dt.datetime) -> None:
+        """The calendar name carries it once; every event repeating it is noise."""
+        calendar = Calendar.from_ical(render_calendar(dynamo, VET_KITS, stamp))
+        first = next(iter(calendar.walk("VEVENT")))
+        description = str(first["DESCRIPTION"])
+        assert "kolo – 1.A (podzim 2026)" in description
+        assert "Veteránská liga" not in description
+
+    def test_output_path_is_league_scoped(self, kktnc: Team, dynamo: Team) -> None:
+        assert kktnc.ics_path == "ics/hl/7-h/kktnc-on-tour.ics"
+        assert dynamo.ics_path == "ics/vet/1-a/dynamo-uk-vet.ics"
 
     def test_every_event_carries_a_three_hour_alarm(self, kktnc: Team, stamp: dt.datetime) -> None:
         calendar = Calendar.from_ical(render_calendar(kktnc, KITS, stamp))
@@ -206,6 +233,11 @@ class TestTimezoneCorrectness:
         assert start.utcoffset() == dt.timedelta(hours=1)
         assert start.strftime("%Y-%m-%d %H:%M") == "2026-11-04 20:30"
         assert start.astimezone(dt.UTC).strftime("%H:%M") == "19:30"
+
+    def test_a_veterans_calendar_also_survives_validation(
+        self, dynamo: Team, stamp: dt.datetime
+    ) -> None:
+        validate_calendar(dynamo, render_calendar(dynamo, VET_KITS, stamp))
 
     def test_validation_accepts_our_own_output(self, kktnc: Team, stamp: dt.datetime) -> None:
         data = render_calendar(kktnc, KITS, stamp)

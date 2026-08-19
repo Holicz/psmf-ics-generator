@@ -6,3 +6,7 @@ __pycache__/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+
+# Local deploy helper: it carries the server address, so it stays out of git.
+Makefile
+.release-mirror/

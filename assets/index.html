@@ -3,19 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kalendář zápasů – Hanspaulská liga podzim 2026</title>
-<meta name="description" content="Stáhněte si rozpis zápasů svého týmu z Hanspaulské ligy jako kalendář .ics pro Google Kalendář, Apple Kalendář nebo Outlook.">
+<title>Kalendář zápasů PSMF – podzim 2026</title>
+<meta name="description" content="Stáhněte si rozpis zápasů svého týmu z Hanspaulské, veteránské, superveteránské nebo ultraveteránské ligy jako kalendář .ics pro Google Kalendář, Apple Kalendář nebo Outlook.">
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
 </head>
 <body>
 <header class="site-header">
   <h1>Kalendář zápasů</h1>
-  <p class="tagline">Hanspaulská liga&nbsp;– podzim 2026. Najdi svůj tým a stáhni si rozpis do kalendáře.</p>
+  <p class="tagline">Soutěže PSMF&nbsp;– podzim 2026. Najdi svůj tým a stáhni si rozpis do kalendáře.</p>
 </header>
 
 <main>
   <section class="search" aria-labelledby="search-label">
+    <!-- The league filter is a real radio group: native keyboard behaviour and
+         semantics, styled as chips. Populated from the index by app.js so a
+         partial build cannot offer a league it did not generate. -->
+    <fieldset id="leagues" class="leagues">
+      <legend>Liga</legend>
+      <div id="league-chips" class="chips"></div>
+    </fieldset>
+
     <label id="search-label" for="q">Hledat tým</label>
     <input
       id="q"
@@ -23,7 +31,7 @@
       autocomplete="off"
       autocapitalize="off"
       spellcheck="false"
-      placeholder="Název týmu, liga"
+      placeholder="Název týmu, liga, skupina"
       role="combobox"
       aria-expanded="false"
       aria-controls="results"
@@ -36,9 +44,23 @@
 </main>
 
 <footer class="site-footer">
-  <p>
-    Data pocházejí z&nbsp;<a href="https://www.psmf.cz/">psmf.cz</a>.
-    Stažena <time id="generated"></time>.
+  <p class="credit">
+    <span>
+      Data pocházejí z&nbsp;<a href="https://www.psmf.cz/">psmf.cz</a>.
+      Stažena <time id="generated"></time>.
+    </span>
+    <a
+      class="repo"
+      href="https://github.com/Holicz/psmf-ics-generator"
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Zdrojový kód na GitHubu"
+      aria-label="Zdrojový kód na GitHubu">
+      <!-- Inline so the footer needs no external request and no icon font. -->
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+      </svg>
+    </a>
   </p>
 </footer>
 

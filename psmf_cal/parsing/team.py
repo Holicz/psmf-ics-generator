@@ -5,6 +5,10 @@ A team page carries four tables: the group standings, the fixture list
 roster (``referees-table``). Only the fixture list is read here -- it is
 selected by class and then confirmed by its header row, so a layout change is a
 loud failure rather than a silently empty calendar.
+
+The fixture list is not all fixtures: in a group with an odd number of teams it
+also carries each team's bye round, published as an otherwise empty row. Those
+are skipped; everything else that does not parse is an error.
 """
 
 from __future__ import annotations
@@ -15,14 +19,18 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Tag
 
-from psmf_cal.models import SEASON_SLUG, GroupRef, Match, Pitch, TeamRef
+from psmf_cal.models import GroupRef, League, Match, Pitch, TeamRef
 from psmf_cal.parsing.text import ParseError, clean, parse_time, split_date_cell, to_prague
 
 _FIXTURE_TABLE_CLASS = "games-new-table"
 _EXPECTED_HEADERS = ("Datum", "Čas", "Hřiště", "Domácí - Hosté", "Kolo")
-_TEAM_HREF_RE = re.compile(rf"/souteze/{re.escape(SEASON_SLUG)}/[^/]+/tymy/([^/]+)/?$")
 _PITCH_HREF_RE = re.compile(r"/hriste/#([A-Za-z0-9]+)$")
 _ROUND_RE = re.compile(r"^(\d+)\.?$")
+
+
+def _team_href_re(league: League) -> re.Pattern[str]:
+    """Any team link inside this league's season, whatever its group."""
+    return re.compile(rf"/souteze/{re.escape(league.season_slug)}/[^/]+/tymy/([^/]+)/?$")
 
 
 def _fixture_table(soup: BeautifulSoup, url: str) -> Tag:
@@ -39,16 +47,17 @@ def _fixture_table(soup: BeautifulSoup, url: str) -> Tag:
     return table
 
 
-def _team_refs(cell: Tag, url: str, base_url: str) -> tuple[TeamRef, TeamRef]:
+def _team_refs(cell: Tag, url: str, base_url: str, league: League) -> tuple[TeamRef, TeamRef]:
     """Home and away, taken from the two team links in document order.
 
     Reading identity from the hrefs rather than the visible text means a team
     whose name contains a dash, or two teams with the same name, still resolve
     correctly.
     """
+    pattern = _team_href_re(league)
     refs: list[TeamRef] = []
     for anchor in cell.find_all("a", href=True):
-        match = _TEAM_HREF_RE.search(str(anchor["href"]).split("?")[0])
+        match = pattern.search(str(anchor["href"]).split("?")[0])
         if match is None:
             continue  # the shirt-colour toggles link to "#"
         refs.append(
@@ -80,6 +89,18 @@ def _own_colors(table: Tag, own_name: str) -> str | None:
     return None
 
 
+def _is_bye(cells: list[Tag]) -> bool:
+    """Whether this row is a round off rather than a fixture.
+
+    A group with an odd number of teams gives every team one round with no
+    opponent, and the schedule publishes it as a row carrying the round number
+    and the team's own name with the date, time and pitch left blank. Requiring
+    *all three* to be empty keeps this from swallowing a fixture row that is
+    merely malformed -- a half-filled row still raises.
+    """
+    return not any(clean(cells[index].get_text()) for index in (0, 1, 2))
+
+
 @dataclass(frozen=True, slots=True)
 class ParsedTeamPage:
     """Everything one team page contributes to the build."""
@@ -103,6 +124,8 @@ def parse_team_page(
         cells = row.find_all("td")
         if len(cells) != 5:
             raise ParseError(url, f"fixture row has {len(cells)} cells, expected 5")
+        if _is_bye(cells):
+            continue
 
         weekday, date = split_date_cell(cells[0].get_text(), url=url)
         kickoff_time = parse_time(clean(cells[1].get_text()), url=url)
@@ -116,7 +139,7 @@ def parse_team_page(
         if code not in pitches:
             raise ParseError(url, f"pitch code {code!r} is absent from the pitch directory")
 
-        home, away = _team_refs(cells[3], url, base_url=url)
+        home, away = _team_refs(cells[3], url, base_url=url, league=group.league)
         if team_slug not in (home.slug, away.slug):
             raise ParseError(
                 url, f"fixture {home.slug} v {away.slug} does not involve {team_slug!r}"

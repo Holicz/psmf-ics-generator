@@ -10,28 +10,93 @@ import datetime as dt
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-SEASON_SLUG = "2026-hanspaulska-liga-podzim"
-SEASON_LABEL = "HL podzim 2026"
+#: Half of the season every competition below is crawled for. The four leagues
+#: run in lockstep, so one label covers all of them.
+SEASON_LABEL = "podzim 2026"
 #: Suffix used inside every UID; identifies the season so a future spring run cannot collide.
 SEASON_UID_TAG = "2026p"
 
 BASE_URL = "https://www.psmf.cz"
-SEASON_URL = f"{BASE_URL}/souteze/{SEASON_SLUG}/"
 PITCHES_URL = f"{BASE_URL}/hriste/"
 
 
 @dataclass(frozen=True, slots=True)
-class GroupRef:
-    """One group (skupina) within the season, e.g. level 7 group H."""
+class League:
+    """One PSMF competition, e.g. the Hanspaulská or the veterans' league.
 
+    ``key`` is ours, not psmf.cz's: it is the segment that separates leagues in
+    the output tree and in every UID. Group slugs such as ``1-a`` exist in all
+    four leagues, so without it two different teams would collide.
+    """
+
+    key: str  # "hl", "vet", "svet", "uvet"
+    season_slug: str  # path segment on psmf.cz
+    name: str  # "Veteránská liga"
+    short: str  # "VET" -- the badge in the UI and the calendar-name prefix
+    #: Extra search terms folded into the index so "veterani" finds this league.
+    aliases: tuple[str, ...] = ()
+
+    @property
+    def url(self) -> str:
+        return f"{BASE_URL}/souteze/{self.season_slug}/"
+
+
+#: Every league the site covers, in the order psmf.cz itself lists them.
+#: Futsal is deliberately absent: it runs on a cross-year season slug
+#: (``2025-2026-futsal-podzim``) and is a different sport with its own page
+#: layout, so it is not a one-line addition here.
+LEAGUES: tuple[League, ...] = (
+    League(
+        key="hl",
+        season_slug="2026-hanspaulska-liga-podzim",
+        name="Hanspaulská liga",
+        short="HL",
+        aliases=("hanspaulka", "hl"),
+    ),
+    League(
+        key="vet",
+        season_slug="2026-veteranska-liga-podzim",
+        name="Veteránská liga",
+        short="VET",
+        aliases=("veterani", "vet"),
+    ),
+    League(
+        key="svet",
+        season_slug="2026-superveteranska-liga-podzim",
+        name="Superveteránská liga",
+        short="SVET",
+        aliases=("superveterani", "svet"),
+    ),
+    League(
+        key="uvet",
+        season_slug="2026-ultraveteranska-liga-podzim",
+        name="Ultraveteránská liga",
+        short="UVET",
+        aliases=("ultraveterani", "uvet"),
+    ),
+)
+
+LEAGUES_BY_KEY: Mapping[str, League] = {league.key: league for league in LEAGUES}
+
+
+@dataclass(frozen=True, slots=True)
+class GroupRef:
+    """One group (skupina) within a league, e.g. level 7 group H."""
+
+    league: League
     level: int
     group: str  # single upper-case letter, "A".."N"
     url: str
 
     @property
     def slug(self) -> str:
-        """Path segment used by psmf.cz and by our output tree, e.g. ``7-h``."""
+        """Path segment used by psmf.cz, e.g. ``7-h``. Unique only within a league."""
         return f"{self.level}-{self.group.lower()}"
+
+    @property
+    def key(self) -> str:
+        """Globally unique identity of this group, e.g. ``vet/1-a``."""
+        return f"{self.league.key}/{self.slug}"
 
     @property
     def label(self) -> str:
@@ -81,7 +146,7 @@ class Pitch:
 class TeamRef:
     """A team as referenced from a group listing or a fixture row.
 
-    Slugs are unique only *within* a group, so a full identity is (group, slug).
+    Slugs are unique only *within* a group, so a full identity is (league, group, slug).
     """
 
     slug: str
@@ -125,13 +190,21 @@ class Team:
     colors: str | None
 
     @property
+    def league(self) -> League:
+        return self.group.league
+
+    @property
     def calendar_name(self) -> str:
-        return f"{self.name} – {SEASON_LABEL} ({self.group.label})"
+        return f"{self.name} – {self.league.short} {SEASON_LABEL} ({self.group.label})"
 
     @property
     def ics_path(self) -> str:
-        """Path of the generated file relative to the site root."""
-        return f"ics/{self.group.slug}/{self.slug}.ics"
+        """Path of the generated file relative to the site root.
+
+        The league segment is what keeps ``1-a`` in the veterans' league from
+        overwriting ``1-a`` in the Hanspaulská.
+        """
+        return f"ics/{self.league.key}/{self.group.slug}/{self.slug}.ics"
 
 
 #: Kits of every team in one group, keyed by team slug. Fixtures are always

@@ -17,6 +17,13 @@
   --home: #1b7f4b;
   --away: #8a5a00;
 
+  /* One hue per league. The badge on a result row and the chip that selects
+     that league share it, so the filter and the list read as one control. */
+  --lg-hl: #1b7f4b;
+  --lg-vet: #1d5fbf;
+  --lg-svet: #7a3fb8;
+  --lg-uvet: #a8560c;
+
   --radius: 10px;
   --shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 4px 12px rgba(0, 0, 0, .05);
 }
@@ -35,6 +42,10 @@
     --focus: #6ba6ff;
     --home: #46b97c;
     --away: #d9a441;
+    --lg-hl: #2f9560;
+    --lg-vet: #2f6fd0;
+    --lg-svet: #8a53c6;
+    --lg-uvet: #b96a1f;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 14px rgba(0, 0, 0, .3);
   }
 }
@@ -65,6 +76,88 @@ a { color: var(--focus); }
 .site-header { padding: 2rem 0 1.25rem; }
 .site-header h1 { margin: 0; font-size: 1.6rem; letter-spacing: -.01em; }
 .tagline { margin: .4rem 0 0; color: var(--text-muted); }
+
+/* ---------- league filter ---------- */
+
+/* Real radio inputs styled as chips: the browser keeps the group semantics,
+   the arrow keys and the focus ring, and this file only paints them. */
+.leagues {
+  margin: 0 0 1.1rem;
+  padding: 0;
+  border: 0;
+}
+
+.leagues legend {
+  padding: 0;
+  font-weight: 600;
+  font-size: .9rem;
+  margin-bottom: .35rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+
+.chip {
+  --chip: var(--text-muted);
+  display: inline-flex;
+  align-items: baseline;
+  gap: .4rem;
+  padding: .35rem .7rem;
+  font-size: .88rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chip-hl   { --chip: var(--lg-hl); }
+.chip-vet  { --chip: var(--lg-vet); }
+.chip-svet { --chip: var(--lg-svet); }
+.chip-uvet { --chip: var(--lg-uvet); }
+
+/* The radio itself is the accessible control, so it is hidden from sight only
+   -- never display:none, which would take it out of the tab order too. */
+.chip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.chip:hover { border-color: var(--chip); }
+
+.chip:has(input:checked) {
+  color: var(--chip);
+  border-color: var(--chip);
+  background: color-mix(in srgb, var(--chip) 12%, var(--surface));
+  box-shadow: inset 0 0 0 1px var(--chip);
+}
+
+.chip:has(input:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.chip-count {
+  margin-left: .1rem;
+  font-size: .75rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.chip:has(input:checked) .chip-count { color: inherit; opacity: .8; }
 
 /* ---------- search ---------- */
 
@@ -126,7 +219,9 @@ a { color: var(--focus); }
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.result-name { font-weight: 600; }
+/* A league badge plus a group badge plus a long name is more than a phone can
+   fit on one line; the name is what may wrap, never the badges. */
+.result-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 
 .badge {
   flex: none;
@@ -139,7 +234,29 @@ a { color: var(--focus); }
   border-radius: 999px;
 }
 
+.badge.league {
+  background: var(--lg);
+  letter-spacing: .02em;
+}
+
+.lg-hl   { --lg: var(--lg-hl); }
+.lg-vet  { --lg: var(--lg-vet); }
+.lg-svet { --lg: var(--lg-svet); }
+.lg-uvet { --lg: var(--lg-uvet); }
+
 .result-meta { margin-left: auto; font-size: .8rem; color: var(--text-muted); }
+
+/* Offers a way out of a filter that found nothing; it lives inside the status
+   line, so it has to read as running text rather than as another button. */
+.link-button {
+  padding: 0;
+  font: inherit;
+  color: var(--focus);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
 
 /* ---------- detail ---------- */
 
@@ -232,6 +349,21 @@ a { color: var(--focus); }
 }
 
 .site-footer p { margin: .3rem 0; }
+/* The credit reads from the left, the repo mark sits at the far right. */
+.credit {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+
+/* Logo only, in the body colour rather than the link blue, and inert on hover:
+   it is a signpost, not something the eye should be pulled towards. */
+.repo {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--text);
+  cursor: pointer;
+}
 
 @media (min-width: 40rem) {
   .fixture { grid-template-columns: 8.5rem 1fr; align-items: baseline; }

@@ -2,27 +2,37 @@
  *
  * Everything is pre-generated: this file searches an index and renders a panel.
  * It never builds an .ics; the download links point at files written at build time.
+ *
+ * The index spans four leagues, so a team's identity is (league, group, slug).
+ * Group labels such as "1.A" exist in every league, which is why the league is
+ * both a filter above the box and a badge on every row.
  */
 (function () {
   'use strict';
 
   var MAX_RESULTS = 40;
+  var ALL = '';                     /* the "Vše" filter: no league restriction */
 
   var input = document.getElementById('q');
   var results = document.getElementById('results');
   var detail = document.getElementById('detail');
   var status = document.getElementById('status');
   var generated = document.getElementById('generated');
+  var chipHost = document.getElementById('league-chips');
 
   var data = null;
+  var leagues = {};                 /* key -> league entry from the index */
+  var league = ALL;
+  var chips = [];                   /* [{key, radio}] in display order */
   var matches = [];
   var cursor = -1;
+  var opened = null;                /* the team whose schedule is on screen */
 
   /* Fold text for diacritics- and case-insensitive matching.
    *
    * Mirrored exactly by normalize_search() in psmf_cal/parsing/text.py, which
-   * precomputes this for every team name; here it is applied to the query.
-   * Verify the two agree with:
+   * precomputes this for every team name and every league's search terms; here
+   * it is applied to the query. Verify the two agree with:
    *   node -e "console.log('Měcholupská'.normalize('NFD').replace(/\p{M}/gu,'').toLowerCase())"
    *   python3 -c "from psmf_cal.parsing.text import normalize_search as n; print(n('Měcholupská'))"
    */
@@ -30,18 +40,25 @@
     return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
   }
 
-  function haystack(team) {
-    /* Name plus both spellings of the group, so "7.H" and "7h" both work. */
-    return team.q + ' ' + normalize(team.g) + ' ' + normalize(team.g).replace('.', '');
+  /* Everything one team can be found by, folded once at start-up rather than
+   * per keystroke: the name, the league (name, badge and aliases such as
+   * "vet"), and both spellings of the group so "7.H" and "7h" both work. */
+  function buildHaystacks() {
+    data.teams.forEach(function (team) {
+      var group = normalize(team.g);
+      var entry = leagues[team.l];
+      team.hay = team.q + ' ' + (entry ? entry.q : team.l) + ' ' +
+        group + ' ' + group.replace('.', '');
+    });
   }
 
-  function search(query) {
+  function search(query, restrictTo) {
     var needle = normalize(query).trim();
     if (!needle) return [];
     var terms = needle.split(/\s+/);
     return data.teams.filter(function (team) {
-      var hay = haystack(team);
-      return terms.every(function (term) { return hay.indexOf(term) !== -1; });
+      if (restrictTo !== ALL && team.l !== restrictTo) return false;
+      return terms.every(function (term) { return team.hay.indexOf(term) !== -1; });
     });
   }
 
@@ -52,15 +69,71 @@
     return node;
   }
 
+  /* ---------- league filter ---------- */
+
+  /* "Veteránská liga" -> "Veteránská": the chips sit under a "Liga" legend, so
+   * repeating the word in every one of them is noise. */
+  function chipLabel(name) {
+    return name.replace(/\s+liga$/i, '');
+  }
+
+  function addChip(key, label, count) {
+    var wrap = el('label', 'chip' + (key ? ' chip-' + key : ' chip-all'));
+    var radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'liga';
+    radio.value = key;
+    radio.checked = key === league;
+    radio.addEventListener('change', function () { setLeague(key); });
+    wrap.appendChild(radio);
+    wrap.appendChild(el('span', 'chip-text', label));
+    wrap.appendChild(el('span', 'chip-count', String(count)));
+    chipHost.appendChild(wrap);
+    chips.push({ key: key, radio: radio });
+  }
+
+  function renderChips() {
+    var counts = {};
+    data.teams.forEach(function (t) { counts[t.l] = (counts[t.l] || 0) + 1; });
+
+    addChip(ALL, 'Vše', data.teams.length);
+    data.leagues.forEach(function (entry) {
+      addChip(entry.k, chipLabel(entry.n), counts[entry.k] || 0);
+    });
+  }
+
+  function setLeague(key) {
+    if (league === key) return;
+    league = key;
+    chips.forEach(function (chip) { chip.radio.checked = chip.key === key; });
+    onInput();   /* drops the open schedule too, if the filter excluded it */
+    syncUrl();
+  }
+
+  /* ---------- results ---------- */
+
+  function leagueName(key) {
+    return leagues[key] ? leagues[key].n : key;
+  }
+
+  function leagueShort(key) {
+    return leagues[key] ? leagues[key].s : key;
+  }
+
   function renderResults() {
     results.textContent = '';
     var shown = matches.slice(0, MAX_RESULTS);
+    /* Redundant once a single league is selected -- the chip above already says it. */
+    var showLeague = league === ALL;
 
     shown.forEach(function (team, index) {
       var li = el('li', null);
       li.id = 'opt-' + index;
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', index === cursor ? 'true' : 'false');
+      if (showLeague) {
+        li.appendChild(el('span', 'badge league lg-' + team.l, leagueShort(team.l)));
+      }
       li.appendChild(el('span', 'badge', team.g));
       li.appendChild(el('span', 'result-name', team.n));
       li.appendChild(el('span', 'result-meta', team.m.length + ' zápasů'));
@@ -80,16 +153,37 @@
       input.removeAttribute('aria-activedescendant');
     }
 
-    if (!input.value.trim()) {
-      status.textContent = '';
-    } else if (!matches.length) {
-      status.textContent = 'Žádný tým neodpovídá.';
-    } else if (matches.length > MAX_RESULTS) {
-      status.textContent = 'Nalezeno ' + matches.length + ' týmů, zobrazeno prvních ' +
-        MAX_RESULTS + '. Zkus být konkrétnější.';
+    renderStatus();
+  }
+
+  function renderStatus() {
+    status.textContent = '';
+    if (!input.value.trim()) return;
+
+    if (!matches.length) {
+      /* A miss inside one league is usually the filter, not the query: say how
+       * many teams the same words find everywhere and offer one tap out. */
+      var elsewhere = league === ALL ? [] : search(input.value, ALL);
+      if (elsewhere.length) {
+        status.appendChild(document.createTextNode(
+          'V lize ' + leagueName(league) + ' nic. Ve všech ligách: ' + elsewhere.length + '. '));
+        var reset = el('button', 'link-button', 'Hledat ve všech ligách');
+        reset.type = 'button';
+        reset.addEventListener('click', function () { setLeague(ALL); });
+        status.appendChild(reset);
+      } else {
+        status.textContent = 'Žádný tým neodpovídá.';
+      }
+      return;
+    }
+
+    var where = league === ALL ? '' : ' v lize ' + leagueName(league);
+    if (matches.length > MAX_RESULTS) {
+      status.textContent = 'Nalezeno ' + matches.length + ' týmů' + where +
+        ', zobrazeno prvních ' + MAX_RESULTS + '. Zkus být konkrétnější.';
     } else {
       status.textContent = 'Nalezeno ' + matches.length +
-        (matches.length === 1 ? ' tým.' : ' týmů.');
+        (matches.length === 1 ? ' tým' : ' týmů') + where + '.';
     }
   }
 
@@ -99,15 +193,22 @@
     return many;
   }
 
+  function closeDetail() {
+    opened = null;
+    detail.hidden = true;
+    detail.textContent = '';
+  }
+
   function renderDetail(team) {
+    opened = team;
     detail.textContent = '';
     detail.hidden = false;
 
     detail.appendChild(el('h2', null, team.n));
 
     var sub = el('p', 'detail-sub');
-    sub.textContent = 'Skupina ' + team.g + ' · ' + team.m.length + ' ' +
-      plural(team.m.length, 'zápas', 'zápasy', 'zápasů') +
+    sub.textContent = leagueName(team.l) + ' · skupina ' + team.g + ' · ' +
+      team.m.length + ' ' + plural(team.m.length, 'zápas', 'zápasy', 'zápasů') +
       (team.c ? ' · dresy: ' + team.c : '');
     detail.appendChild(sub);
 
@@ -165,14 +266,17 @@
     input.value = '';
     matches = [];
     cursor = -1;
-    detail.hidden = true;
-    detail.textContent = '';
+    closeDetail();
     renderResults();
+    syncUrl();
   }
 
   function onInput() {
-    matches = search(input.value);
+    matches = search(input.value, league);
     cursor = matches.length ? 0 : -1;
+    /* A schedule left standing under a result list that no longer contains it
+     * reads as the answer to the query being typed, which it is not. */
+    if (opened && matches.indexOf(opened) === -1) closeDetail();
     renderResults();
   }
 
@@ -197,8 +301,28 @@
     renderResults();
   }
 
+  /* Keep the address bar in step with the query and the filter, so a search
+   * worth sharing can simply be copied out of it. replaceState, not pushState:
+   * typing must not bury the page under a hundred history entries. */
+  function syncUrl() {
+    if (!window.history || !history.replaceState) return;
+    var parts = [];
+    if (league !== ALL) parts.push('liga=' + encodeURIComponent(league));
+    if (input.value.trim()) parts.push('q=' + encodeURIComponent(input.value.trim()));
+    history.replaceState(null, '', parts.length ? '?' + parts.join('&') : location.pathname);
+  }
+
+  function onInputAndSync() {
+    onInput();
+    syncUrl();
+  }
+
   function start(payload) {
     data = payload;
+    data.leagues = data.leagues || [];
+    data.leagues.forEach(function (entry) { leagues[entry.k] = entry; });
+    buildHaystacks();
+
     var when = new Date(payload.generated);
     generated.dateTime = payload.generated;
     generated.textContent = isNaN(when.getTime())
@@ -208,11 +332,17 @@
           hour: '2-digit', minute: '2-digit'
         });
 
+    var params = new URLSearchParams(location.search);
+    var wanted = params.get('liga');
+    if (wanted && leagues[wanted]) league = wanted;
+
+    renderChips();
+
     input.disabled = false;
-    input.addEventListener('input', onInput);
+    input.addEventListener('input', onInputAndSync);
     input.addEventListener('keydown', onKeydown);
 
-    var initial = new URLSearchParams(location.search).get('q');
+    var initial = params.get('q');
     if (initial) { input.value = initial; onInput(); }
     input.focus();
   }

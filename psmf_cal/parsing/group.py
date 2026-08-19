@@ -7,12 +7,13 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
-from psmf_cal.models import SEASON_SLUG, GroupRef, TeamRef
+from psmf_cal.models import GroupRef, TeamRef
 from psmf_cal.parsing.text import ParseError, clean
 
 
 def _team_href_re(group: GroupRef) -> re.Pattern[str]:
-    return re.compile(rf"/souteze/{re.escape(SEASON_SLUG)}/{re.escape(group.slug)}/tymy/([^/]+)/?$")
+    season = re.escape(group.league.season_slug)
+    return re.compile(rf"/souteze/{season}/{re.escape(group.slug)}/tymy/([^/]+)/?$")
 
 
 def parse_group(html: str, url: str, group: GroupRef) -> list[TeamRef]:
@@ -31,5 +32,5 @@ def parse_group(html: str, url: str, group: GroupRef) -> list[TeamRef]:
         teams.setdefault(slug, TeamRef(slug=slug, name=name, url=urljoin(url, match.group(0))))
 
     if not teams:
-        raise ParseError(url, f"group {group.label} linked no teams")
+        raise ParseError(url, f"{group.league.name} group {group.label} linked no teams")
     return sorted(teams.values(), key=lambda t: t.slug)
