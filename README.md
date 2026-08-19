@@ -1,4 +1,4 @@
-# psmf-cal
+# psmf-ics-generator
 
 Statická stránka, kde si hráč najde svůj tým a stáhne rozpis zápasů jako `.ics`
 kalendář pro Google Kalendář, Apple Kalendář nebo Outlook.
